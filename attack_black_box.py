@@ -169,6 +169,16 @@ def perform_attacks(
         enc_conv = encoder.encoder_conv
         enc_mlp = encoder.enc_mlp
         enc = (enc_conv, enc_mlp)
+        model = lambda x: bayes_classifier(
+                        x,
+                        (enc_conv, enc_mlp),
+                        dec,
+                        ll,
+                        dimY,
+                        lowerbound=lowerbound,
+                        K=10,
+                        beta=1.0,
+                    )
         X_ph = torch.zeros(1, *input_shape).to(next(encoder.parameters()).device)
         Y_ph = torch.zeros(1, dimY).to(next(encoder.parameters()).device)
         _, eval_fn = construct_optimizer(X_ph, Y_ph, enc, dec, ll, K, vae_type)
@@ -196,7 +206,7 @@ def perform_attacks(
                         adv_images = sticker_attack(images, epsilon)
                     elif attack == "SPSA":
                         adv_images = spsa(
-                            enc_conv,
+                            model,
                             images,
                             eps=epsilon,
                             nb_iter=100,
@@ -315,7 +325,7 @@ if __name__ == "__main__":
         "--sticker_sizes",
         type=float,
         nargs="+",
-        default=[0, 0.01, 0.02, 0.05, 0.1, 0.2],
+        default=[0, 0.05, 0.08, 0.1, 0.15, 0.2],
         help="List of sticker size values for sticker attack.",
     )
     parser.add_argument(

@@ -8,7 +8,7 @@ from cleverhans.torch.utils import optimize_linear
 
 
 def momentum_iterative_method(
-    model_fn: torch.nn.Module,
+    model_fn,
     x: torch.Tensor,
     eps: float = 0.3,
     eps_iter: float = 0.06,

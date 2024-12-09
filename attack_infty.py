@@ -154,6 +154,16 @@ def perform_attacks(
         enc_conv = encoder.encoder_conv
         enc_mlp = encoder.enc_mlp
         enc = (enc_conv, enc_mlp)
+        model = lambda x: bayes_classifier(
+                        x,
+                        (enc_conv, enc_mlp),
+                        dec,
+                        ll,
+                        dimY,
+                        lowerbound=lowerbound,
+                        K=10,
+                        beta=1.0,
+                    )
         X_ph = torch.zeros(1, *input_shape).to(next(encoder.parameters()).device)
         Y_ph = torch.zeros(1, dimY).to(next(encoder.parameters()).device)
         _, eval_fn = construct_optimizer(X_ph, Y_ph, enc, dec, ll, K, vae_type)
@@ -181,7 +191,7 @@ def perform_attacks(
 
                     if attack == "FGSM":
                         adv_images = fast_gradient_method(
-                            enc_conv,
+                            model,
                             images,
                             eps=epsilon,
                             norm=np.inf,
@@ -191,7 +201,7 @@ def perform_attacks(
                         )
                     elif attack == "PGD":
                         adv_images = projected_gradient_descent(
-                            enc_conv,
+                            model,
                             images,
                             eps=epsilon,
                             eps_iter=0.01,
@@ -204,7 +214,7 @@ def perform_attacks(
                         )
                     elif attack == "MIM":
                         adv_images = momentum_iterative_method(
-                            enc_conv,
+                            model,
                             images,
                             eps=epsilon,
                             eps_iter=0.01,
