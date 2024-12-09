@@ -6,8 +6,9 @@ from cleverhans.torch.attacks.projected_gradient_descent import (
     projected_gradient_descent,
 )
 from cleverhans.torch.attacks.spsa import spsa
+from tqdm import tqdm
 
-from alg.vae_new import bayes_classifier, construct_optimizer
+from alg.vae_new import bayes_classifier
 from attack_black_box import load_model
 from attacks.black_box import gaussian_perturbation_attack, sticker_attack
 from attacks.momentum_iterative_method import momentum_iterative_method
@@ -15,14 +16,16 @@ from utils.utils import load_data
 
 vae_type = "A"
 data_name = "gtsrb"
-infty = True
+infty = False
 bbox = True
 
 
 _, test_dataset = load_data(data_name, path="./data", labels=None, conv=True)
 test_dataset = torch.utils.data.Subset(test_dataset, range(1))
 images, _ = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=1)))
-encoder, generator = load_model(data_name, vae_type, 0, device="cpu")
+encoder, generator = load_model(
+    data_name, vae_type, 0, device="cuda" if torch.cuda.is_available() else "cpu"
+)
 encoder.eval()
 if vae_type == "A":
     dec = (generator.pyz_params, generator.pxzy_params)
@@ -69,7 +72,10 @@ sticker_sizes = [0, 0.05, 0.08, 0.1, 0.15, 0.2]
 epsilons = [0, 0.01, 0.02, 0.05, 0.1, 0.2]
 if infty:
     images_adv = [
-        [sticker_attack(images, sticker_size=eps) for eps in sticker_sizes],
+        [
+            sticker_attack(images, sticker_size=eps)
+            for eps in tqdm(sticker_sizes, desc="Sticker")
+        ],
         [
             spsa(
                 model,
@@ -82,15 +88,18 @@ if infty:
                 delta=0.01,
                 sanity_checks=False,
             )
-            for eps in epsilons
+            for eps in tqdm(epsilons, desc="SPSA")
         ],
-        [gaussian_perturbation_attack(images, eps=eps) for eps in epsilons],
+        [
+            gaussian_perturbation_attack(images, eps=eps)
+            for eps in tqdm(epsilons, desc="Gaussian")
+        ],
     ]
 
     # Plot images (one line per attack)
     fig, axes = plt.subplots(3, len(epsilons), figsize=(12, 6))
-    for i, images in enumerate(images_adv):
-        for j, image in enumerate(images):
+    for i, img in enumerate(images_adv):
+        for j, image in enumerate(img):
             axes[i, j].imshow(image[0].permute(1, 2, 0).numpy())
             axes[i, j].axis("off")
             if i == 0:
@@ -104,7 +113,6 @@ if infty:
 
 
 if bbox:
-    print(model(images).shape)
 
     images_adv = [
         [
@@ -117,7 +125,7 @@ if bbox:
                 clip_max=1.0,
                 sanity_checks=False,
             )
-            for eps in epsilons
+            for eps in tqdm(epsilons, desc="FGSM")
         ],
         [
             projected_gradient_descent(
@@ -132,7 +140,7 @@ if bbox:
                 rand_init=True,
                 sanity_checks=False,
             )
-            for eps in epsilons
+            for eps in tqdm(epsilons, desc="PGD")
         ],
         [
             momentum_iterative_method(
@@ -147,7 +155,7 @@ if bbox:
                 clip_max=1.0,
                 sanity_checks=False,
             )
-            for eps in epsilons
+            for eps in tqdm(epsilons, desc="MIM")
         ],
     ]
 
