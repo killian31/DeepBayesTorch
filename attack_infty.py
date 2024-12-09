@@ -110,17 +110,17 @@ def perform_attacks(
 
     Args:
         data_name (str): Dataset name ('mnist').
-        vae_type (str): Model type ('A', 'B', ..., 'G').
-        checkpoint_index (int): Index of the checkpoint to load.
         epsilons (list): List of epsilon values for FGSM attack.
+        batch_size (int): Batch size for evaluating the model.
         save_dir (str): Directory to save results.
+        device (torch.device, optional): Device to load the model onto.
     """
     vae_types = ["A", "B", "C", "D", "E", "F", "G"]
 
     attack_methods = ["FGSM", "PGD", "MIM"]
     accuracies = {vae_type: {} for vae_type in vae_types}
     for vae_type in vae_types:
-        encoder, generator = load_model(data_name, vae_type, 0)
+        encoder, generator = load_model(data_name, vae_type, 0, device=device)
         encoder.eval()
         input_shape = (1, 28, 28) if data_name == "mnist" else (3, 32, 32)
         dimY = 10 if data_name != "gtsrb" else 43

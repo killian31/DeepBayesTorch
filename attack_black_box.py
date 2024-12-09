@@ -6,13 +6,13 @@ import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from cleverhans.torch.attacks.spsa import spsa
 from matplotlib import cm
 from tqdm import tqdm
 
 from alg.vae_new import bayes_classifier, construct_optimizer
-from attacks.black_box import sticker_attack
+from attacks.black_box import gaussian_perturbation_attack, sticker_attack
 from utils.utils import load_data, load_params
-from utils.visualisation import plot_images
 
 
 def load_model(data_name, vae_type, checkpoint_index, device=None):
@@ -101,21 +101,25 @@ def load_model(data_name, vae_type, checkpoint_index, device=None):
 
 
 def perform_attacks(
-    data_name, sticker_sizes, batch_size, save_dir="./results/", device=None
+    data_name, sticker_sizes, epsilons, batch_size, save_dir="./results/", device=None
 ):
     """
     Perform FGSM attack on a given model, evaluate accuracy vs. epsilon, and save results.
 
     Args:
         data_name (str): Dataset name ('mnist').
-        vae_type (str): Model type ('A', 'B', ..., 'G').
-        checkpoint_index (int): Index of the checkpoint to load.
+        sticker_sizes (list): List of sticker size values for sticker attack.
         epsilons (list): List of epsilon values for FGSM attack.
+        batch_size (int): Batch size for evaluating the model.
         save_dir (str): Directory to save results.
+        device (torch.device): Device to load the model onto.
     """
+    assert len(sticker_sizes) == len(
+        epsilons
+    ), "Length of sticker_sizes and epsilons must be the same."
     vae_types = ["A", "B", "C", "D", "E", "F", "G"]
 
-    attack_methods = ["Sticker"]
+    attack_methods = ["Sticker", "SPSA", "Gaussian"]
     accuracies = {vae_type: {} for vae_type in vae_types}
     if os.path.exists(save_dir):
         warnings.warn(
@@ -128,14 +132,14 @@ def perform_attacks(
     ll = "l2"
     K = 10
     _, test_dataset = load_data(data_name, path="./data", labels=None, conv=True)
+    # take a subset for debug
+    test_dataset = torch.utils.data.Subset(test_dataset, range(4))
     test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=batch_size, shuffle=False
     )
-    example_adversarial_images = {sticker_size: [] for sticker_size in sticker_sizes}
-    n_rows = min(batch_size, 5)  # number of rows of images to plot
 
     for vae_type in vae_types:
-        encoder, generator = load_model(data_name, vae_type, 0)
+        encoder, generator = load_model(data_name, vae_type, 0, device=device)
         encoder.eval()
 
         if vae_type == "A":
@@ -171,25 +175,43 @@ def perform_attacks(
 
         accuracies[vae_type] = {attack: [] for attack in attack_methods}
 
-        for sticker_size in sticker_sizes:
+        for i in range(len(sticker_sizes)):
             for attack in attack_methods:
+                if attack == "Sticker":
+                    epsilon = sticker_sizes[i]
+                else:
+                    epsilon = epsilons[i]
+
                 correct = 0
                 total = 0
 
                 for images, labels in tqdm(
-                    test_loader, desc=f"{attack}, sticker size={sticker_size}"
+                    test_loader, desc=f"{attack}, param value={epsilon}"
                 ):
                     images, labels = images.to(
                         next(encoder.parameters()).device
                     ), labels.to(next(encoder.parameters()).device)
 
                     if attack == "Sticker":
-                        adv_images = sticker_attack(images, sticker_size)
+                        adv_images = sticker_attack(images, epsilon)
+                    elif attack == "SPSA":
+                        adv_images = spsa(
+                            enc_conv,
+                            images,
+                            eps=epsilon,
+                            nb_iter=100,
+                            norm=np.inf,
+                            clip_min=0.0,
+                            clip_max=1.0,
+                            delta=0.01,
+                            sanity_checks=False,
+                        )
+                    elif attack == "Gaussian":
+                        adv_images = gaussian_perturbation_attack(
+                            images, epsilon, mean=0.0, seed=29
+                        )
                     else:
                         raise ValueError(f"Unsupported attack: {attack}")
-
-                    if len(example_adversarial_images[sticker_size]) < n_rows:
-                        example_adversarial_images[sticker_size].append(adv_images)
 
                     y_pred = bayes_classifier(
                         adv_images,
@@ -206,39 +228,18 @@ def perform_attacks(
 
                 accuracies[vae_type][attack].append(correct / total)
                 print(
-                    f"Sticker size: {sticker_size}, VAE type: {vae_type}, Attack: {attack}, Accuracy: {correct / total}"
+                    f"Param value: {epsilon}, VAE type: {vae_type}, Attack: {attack}, Accuracy: {correct / total}"
                 )
-
-    example_adversarial_images = {
-        sticker_size: torch.cat(example_adversarial_images[sticker_size], dim=0)[
-            :n_rows
-        ]
-        for sticker_size in sticker_sizes
-    }
-    example_adversarial_images = torch.cat(
-        [example_adversarial_images[sticker_size] for sticker_size in sticker_sizes],
-        dim=0,
-    )
 
     with open(
         os.path.join(save_dir, f"{data_name}_accuracy_vs_sticker_size.json"), "w"
     ) as f:
         json.dump(accuracies, f)
 
-    example_adversarial_images = np.array(example_adversarial_images)
-    plot_images(
-        example_adversarial_images,
-        shape=(28, 28) if data_name == "mnist" else (32, 32, 3),
-        path=str(save_dir),
-        filename=f"_{data_name}_adversarial_images",
-        n_rows=n_rows,
-        color=True,
-    )
-
     return accuracies
 
 
-def plot_results(json_file, save_dir, data_name, sticker_sizes):
+def plot_results(json_file, save_dir, data_name, sticker_sizes, epsilons):
     with open(json_file, "r") as f:
         accuracies = json.load(f)
     vae_types = list(accuracies.keys())
@@ -258,38 +259,32 @@ def plot_results(json_file, save_dir, data_name, sticker_sizes):
     for i, attack in enumerate(attack_methods):
         for j, vae_type in enumerate(vae_types):
             color = cmap(j)
-            if len(attack_methods) == 1:
-                axes.plot(
-                    sticker_sizes,
-                    accuracies[vae_type][attack],
-                    marker="o",
-                    label=letter_to_title[vae_type],
-                    linewidth=2,
-                    color=color,
-                )
+            if attack == "Sticker":
+                to_plot = sticker_sizes
             else:
-                axes[i].plot(
-                    sticker_sizes,
-                    accuracies[vae_type][attack],
-                    marker="o",
-                    label=letter_to_title[vae_type],
-                    linewidth=2,
-                    color=color,
-                )
-        if len(attack_methods) == 1:
-            axes.set_title(f"{attack} victim acc")
-            axes.set_xlabel("Sticker size")
-            axes.grid(linestyle="--")
-            axes.legend()
-        else:
+                to_plot = epsilons
+            axes[i].plot(
+                to_plot,
+                accuracies[vae_type][attack],
+                marker="o",
+                label=letter_to_title[vae_type],
+                linewidth=2,
+                color=color,
+            )
+        if attack == "Sticker":
             axes[i].set_title(f"{attack} victim acc")
             axes[i].set_xlabel("Sticker size")
+            axes[i].grid(linestyle="--")
+            axes[i].legend()
+        else:
+            axes[i].set_title(f"{attack} victim acc")
+            axes[i].set_xlabel("Epsilon")
             axes[i].grid(linestyle="--")
             axes[i].legend()
 
     # Save the plot
     plt.tight_layout()
-    filename = f"{data_name}__accuracy_vs_sticker_size_combined.png"
+    filename = f"{data_name}__accuracy_vs_sticker_size_epsilons_combined.png"
     plt.savefig(
         os.path.join(
             save_dir,
@@ -320,9 +315,17 @@ if __name__ == "__main__":
         "--sticker_sizes",
         type=float,
         nargs="+",
-        default=[0, 0.1, 0.2, 0.3, 0.4, 0.5],
+        default=[0, 0.01, 0.02, 0.05, 0.1, 0.2],
         help="List of sticker size values for sticker attack.",
     )
+    parser.add_argument(
+        "--epsilons",
+        type=float,
+        nargs="+",
+        default=[0, 0.01, 0.02, 0.05, 0.1, 0.2],
+        help="List of epsilon values for SPSA attack.",
+    )
+
     parser.add_argument(
         "--batch_size",
         type=int,
@@ -354,6 +357,7 @@ if __name__ == "__main__":
         results = perform_attacks(
             data_name=args.data_name,
             sticker_sizes=args.sticker_sizes,
+            epsilons=args.epsilons,
             batch_size=args.batch_size,
             save_dir=args.save_dir,
             device=args.device,
@@ -364,4 +368,10 @@ if __name__ == "__main__":
             args.json_file = os.path.join(
                 args.save_dir, f"{args.data_name}_accuracy_vs_sticker_size.json"
             )
-        plot_results(args.json_file, args.save_dir, args.data_name, args.sticker_sizes)
+        plot_results(
+            args.json_file,
+            args.save_dir,
+            args.data_name,
+            args.sticker_sizes,
+            args.epsilons,
+        )

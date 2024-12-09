@@ -3,6 +3,46 @@ import random
 import torch
 
 
+def gaussian_perturbation_attack(
+    images: torch.Tensor,
+    eps: float,
+    mean: float = 0.0,
+    seed: int = 29,
+) -> torch.Tensor:
+    """
+    Applies a Gaussian perturbation attack to a batch of images.
+
+    This attack adds Gaussian noise to each pixel in the images, where the noise
+    is sampled from a normal distribution with specified mean and standard deviation.
+    The perturbation is controlled by the `eps` parameter, which represents the
+    standard deviation of the noise.
+
+    Args:
+        images (torch.Tensor): A batch of images with shape (B, C, H, W).
+        eps (float, optional): Standard deviation of the Gaussian noise. Default is 0.1.
+        mean (float, optional): Mean of the Gaussian noise. Default is 0.0.
+        seed (int, optional): Random seed for reproducibility. Default is 29.
+
+    Returns:
+        torch.Tensor: A batch of images with Gaussian perturbations applied.
+    """
+    if eps == 0:
+        return images
+    adv_images = images.clone()
+    torch.manual_seed(seed)  # For reproducibility
+
+    # Generate Gaussian noise
+    noise = torch.randn_like(adv_images) * eps + mean
+
+    # Apply the noise to the images
+    adv_images += noise
+
+    # Optionally, clamp the images to maintain valid pixel range
+    adv_images = torch.clamp(adv_images, 0.0, 1.0)
+
+    return adv_images
+
+
 def sticker_attack(
     images: torch.Tensor,
     sticker_size: float = 0.1,
