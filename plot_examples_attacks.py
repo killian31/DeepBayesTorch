@@ -14,7 +14,7 @@ from attacks.black_box import gaussian_perturbation_attack, sticker_attack
 from attacks.momentum_iterative_method import momentum_iterative_method
 from utils.utils import load_data
 
-vae_type = "A"
+vae_type = "B"
 data_name = "gtsrb"
 infty = False
 bbox = True
@@ -23,6 +23,7 @@ bbox = True
 _, test_dataset = load_data(data_name, path="./data", labels=None, conv=True)
 test_dataset = torch.utils.data.Subset(test_dataset, range(1))
 images, _ = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=1)))
+images = images.to("cuda" if torch.cuda.is_available() else "cpu")
 encoder, generator = load_model(
     data_name, vae_type, 0, device="cuda" if torch.cuda.is_available() else "cpu"
 )
@@ -70,18 +71,14 @@ model = lambda x: bayes_classifier(
 )
 sticker_sizes = [0, 0.05, 0.08, 0.1, 0.15, 0.2]
 epsilons = [0, 0.01, 0.02, 0.05, 0.1, 0.2]
-if infty:
+if bbox:
     images_adv = [
-        [
-            sticker_attack(images, sticker_size=eps)
-            for eps in tqdm(sticker_sizes, desc="Sticker")
-        ],
         [
             spsa(
                 model,
                 images,
                 eps=eps,
-                nb_iter=100,
+                nb_iter=10,
                 norm=np.inf,
                 clip_min=0.0,
                 clip_max=1.0,
@@ -94,6 +91,10 @@ if infty:
             gaussian_perturbation_attack(images, eps=eps)
             for eps in tqdm(epsilons, desc="Gaussian")
         ],
+        [
+            sticker_attack(images, sticker_size=eps)
+            for eps in tqdm(sticker_sizes, desc="Sticker")
+        ],
     ]
 
     # Plot images (one line per attack)
@@ -103,16 +104,16 @@ if infty:
             axes[i, j].imshow(image[0].permute(1, 2, 0).numpy())
             axes[i, j].axis("off")
             if i == 0:
-                axes[i, j].set_title(f"eps={sticker_sizes[j]}")
+                axes[i, j].set_title(f"$\varepsilon={sticker_sizes[j]}$")
             else:
-                axes[i, j].set_title(f"eps={epsilons[j]}")
+                axes[i, j].set_title(f"$\varepsilon={epsilons[j]}$")
             if j == 0:
-                axes[i, j].set_ylabel(["Sticker", "SPSA", "Gaussian"][i])
+                axes[i, j].set_ylabel(["SPSA", "Gaussian", "Sticker"][i])
     plt.tight_layout()
     plt.show()
 
 
-if bbox:
+if infty:
 
     images_adv = [
         [
