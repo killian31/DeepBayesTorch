@@ -14,7 +14,7 @@ def logsumexp(x):
     return tmp + x_max.squeeze(0)
 
 
-def bayes_classifier(x, enc, dec, ll, dimY, lowerbound, K=1, beta=1.0):
+def bayes_classifier(x, enc, dec, ll, dimY, lowerbound, K=1, beta=1.0, softmax=True):
     enc_conv, enc_mlp = enc
     fea = enc_conv(x)
     N = x.size(0)
@@ -25,9 +25,12 @@ def bayes_classifier(x, enc, dec, ll, dimY, lowerbound, K=1, beta=1.0):
         bound = lowerbound(x, fea, y, enc_mlp, dec, ll, K, IS=True, beta=beta)
         logpxy.append(bound.unsqueeze(1))
     logpxy = torch.cat(logpxy, dim=1)
+    if softmax:
+        pyx = softmax(logpxy, dim=1)
+    else:
+        pyx = logpxy
     pyx = softmax(logpxy, dim=1)
     return pyx
-
 
 def construct_optimizer(X_ph, Y_ph, enc, dec, ll, K, vae_type="A"):
     enc_conv, enc_mlp = enc
