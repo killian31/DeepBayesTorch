@@ -155,15 +155,15 @@ def perform_attacks(
         enc_mlp = encoder.enc_mlp
         enc = (enc_conv, enc_mlp)
         model = lambda x: bayes_classifier(
-                        x,
-                        (enc_conv, enc_mlp),
-                        dec,
-                        ll,
-                        dimY,
-                        lowerbound=lowerbound,
-                        K=10,
-                        beta=1.0,
-                    )
+            x,
+            (enc_conv, enc_mlp),
+            dec,
+            ll,
+            dimY,
+            lowerbound=lowerbound,
+            K=10,
+            beta=1.0,
+        )
         X_ph = torch.zeros(1, *input_shape).to(next(encoder.parameters()).device)
         Y_ph = torch.zeros(1, dimY).to(next(encoder.parameters()).device)
         _, eval_fn = construct_optimizer(X_ph, Y_ph, enc, dec, ll, K, vae_type)
@@ -265,7 +265,7 @@ def plot_results(json_file, save_dir, data_name, epsilons):
         "F": "DFZ",
         "G": "DBX",
     }
-    fig, axes = plt.subplots(len(attack_methods), 1, figsize=(4, 12))
+    fig, axes = plt.subplots(1, len(attack_methods), figsize=(12, 4))
     num_vae_types = len(vae_types)
     cmap = cm.get_cmap("rainbow", num_vae_types)
     for i, attack in enumerate(attack_methods):
