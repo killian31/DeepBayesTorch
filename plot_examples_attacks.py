@@ -78,7 +78,7 @@ if bbox:
                 model,
                 images,
                 eps=eps,
-                nb_iter=10,
+                nb_iter=2,
                 norm=np.inf,
                 clip_min=0.0,
                 clip_max=1.0,
