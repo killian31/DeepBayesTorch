@@ -78,12 +78,13 @@ if bbox:
                 model,
                 images,
                 eps=eps,
-                nb_iter=2,
+                nb_iter=10,
                 norm=np.inf,
                 clip_min=0.0,
                 clip_max=1.0,
                 delta=0.01,
                 sanity_checks=False,
+                early_stop_loss_threshold=1e-3,
             )
             for eps in tqdm(epsilons, desc="SPSA")
         ],
@@ -101,12 +102,12 @@ if bbox:
     fig, axes = plt.subplots(3, len(epsilons), figsize=(12, 6))
     for i, img in enumerate(images_adv):
         for j, image in enumerate(img):
-            axes[i, j].imshow(image[0].permute(1, 2, 0).numpy())
+            axes[i, j].imshow(image[0].permute(1, 2, 0).cpu().numpy())
             axes[i, j].axis("off")
             if i == 0:
-                axes[i, j].set_title(f"$\varepsilon={sticker_sizes[j]}$")
+                axes[i, j].set_title(f"eps={sticker_sizes[j]}")
             else:
-                axes[i, j].set_title(f"$\varepsilon={epsilons[j]}$")
+                axes[i, j].set_title(f"eps={epsilons[j]}")
             if j == 0:
                 axes[i, j].set_ylabel(["SPSA", "Gaussian", "Sticker"][i])
     plt.tight_layout()
