@@ -111,7 +111,7 @@ if bbox:
             if j == 0:
                 axes[i, j].set_ylabel(["SPSA", "Gaussian", "Sticker"][i])
     plt.tight_layout()
-    plt.show()
+    plt.savefig("attacks_bbox.png")
 
 
 if infty:
@@ -173,4 +173,4 @@ if infty:
             if j == 0:
                 axes[i, j].set_ylabel(["FGSM", "PGD", "MIM"][i])
     plt.tight_layout()
-    plt.show()
+    plt.savefig("attacks_infty.png")
