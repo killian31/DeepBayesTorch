@@ -2,9 +2,8 @@ import time
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.optim as optim
-from torch.nn.functional import one_hot, softmax
+from torch.nn.functional import softmax
 
 
 def logsumexp(x):
@@ -26,7 +25,7 @@ def bayes_classifier(x, enc, dec, ll, dimY, lowerbound, K=1, beta=1.0):
         logpxy.append(bound.unsqueeze(1))
     logpxy = torch.cat(logpxy, dim=1)
     pyx = softmax(logpxy, dim=1)
-    return pyx
+    return pyx, logpxy
 
 
 def construct_optimizer(X_ph, Y_ph, enc, dec, ll, K, vae_type="A"):
