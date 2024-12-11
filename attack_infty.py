@@ -86,7 +86,7 @@ def perform_attacks(
 
         _, test_dataset = load_data(data_name, path="./data", labels=None, conv=True)
         # subset for debug
-        test_dataset = torch.utils.data.Subset(test_dataset, range(10))
+        # test_dataset = torch.utils.data.Subset(test_dataset, range(100))
         test_loader = torch.utils.data.DataLoader(
             test_dataset, batch_size=batch_size, shuffle=False
         )
