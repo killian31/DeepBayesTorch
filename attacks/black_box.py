@@ -211,6 +211,7 @@ def gaussian_perturbation_attack(
 def sticker_attack(
     images: torch.Tensor,
     sticker_size: float = 0.1,
+    n_channels: int = 3,
     placement: str = "center",
     seed: int = 29,
 ) -> torch.Tensor:
@@ -220,6 +221,7 @@ def sticker_attack(
     Args:
         images (torch.Tensor): A batch of images with shape (B, C, H, W).
         sticker_size (float): Fraction of the image dimension for the sticker area.
+        n_channels (int): Number of channels for the sticker color.
         placement (str): Placement of the sticker ("center" or "random").
         color (list): RGB values for the sticker color.
         seed (int): Random seed for reproducibility.
@@ -231,13 +233,17 @@ def sticker_attack(
     batch_size, c, h, w = images.shape
     sticker_dim = int(min(h, w) * sticker_size)  # Sticker size in pixels
     random.seed(seed)  # For reproducibility
-    flashy_colors = [
-        [1.0, 1.0, 0.0],  # Bright yellow
-        [0.0, 1.0, 0.0],  # Neon green
-        [1.0, 0.0, 1.0],  # Neon pink
-        [0.0, 1.0, 1.0],  # Bright cyan
-        [1.0, 0.5, 0.0],  # Bright orange
-    ]
+    if n_channels == 1:
+        # Grayscale sticker
+        flashy_colors = [[1.0]]
+    else:
+        flashy_colors = [
+            [1.0, 1.0, 0.0],  # Bright yellow
+            [0.0, 1.0, 0.0],  # Neon green
+            [1.0, 0.0, 1.0],  # Neon pink
+            [0.0, 1.0, 1.0],  # Bright cyan
+            [1.0, 0.5, 0.0],  # Bright orange
+        ]
     for i in range(batch_size):
         color = random.choice(flashy_colors)
         if placement == "center":
