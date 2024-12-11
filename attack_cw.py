@@ -113,7 +113,9 @@ def perform_attacks(
                             images,
                             n_classes=dimY,
                             targeted=False,
-                            confidence=epsilon,
+                            initial_const=epsilon,
+                            max_iterations=1000,
+                            binary_search_steps=1,
                         )
                     else:
                         raise ValueError(f"Unsupported attack: {attack}")
