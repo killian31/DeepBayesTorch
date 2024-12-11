@@ -181,10 +181,8 @@ def perform_attacks(
             for attack in attack_methods:
                 correct = 0
                 total = 0
-
-                for images, labels in tqdm(
-                    test_loader, desc=f"{attack}, epsilon={epsilon}"
-                ):
+                pbar = tqdm(total=len(test_loader), desc=f"{attack}, epsilon={epsilon}")
+                for images, labels in test_loader:
                     images, labels = images.to(
                         next(encoder.parameters()).device
                     ), labels.to(next(encoder.parameters()).device)
@@ -240,8 +238,11 @@ def perform_attacks(
                     )
                     correct += (torch.argmax(y_pred, dim=1) == labels).sum().item()
                     total += labels.size(0)
+                    pbar.update(1)
 
                 accuracies[vae_type][attack].append(correct / total)
+                pbar.close()
+                print(f"{attack}, epsilon={epsilon}, acc={correct/total:.4f}")
 
     with open(
         os.path.join(save_dir, f"{data_name}_accuracy_vs_epsilon.json"), "w"

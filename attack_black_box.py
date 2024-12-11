@@ -6,12 +6,11 @@ import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from cleverhans.torch.attacks.spsa import spsa
 from matplotlib import cm
 from tqdm import tqdm
 
 from alg.vae_new import bayes_classifier, construct_optimizer
-from attacks.black_box import gaussian_perturbation_attack, sticker_attack
+from attacks.black_box import gaussian_perturbation_attack, simba, sticker_attack
 from utils.utils import load_data, load_params
 
 
@@ -119,7 +118,7 @@ def perform_attacks(
     ), "Length of sticker_sizes and epsilons must be the same."
     vae_types = ["A", "B", "C", "D", "E", "F", "G"]
 
-    attack_methods = ["Sticker", "SPSA", "Gaussian"]
+    attack_methods = ["SimBA", "Gaussian", "Sticker"]
     accuracies = {vae_type: {} for vae_type in vae_types}
     if os.path.exists(save_dir):
         warnings.warn(
@@ -170,15 +169,15 @@ def perform_attacks(
         enc_mlp = encoder.enc_mlp
         enc = (enc_conv, enc_mlp)
         model = lambda x: bayes_classifier(
-                        x,
-                        (enc_conv, enc_mlp),
-                        dec,
-                        ll,
-                        dimY,
-                        lowerbound=lowerbound,
-                        K=10,
-                        beta=1.0,
-                    )
+            x,
+            (enc_conv, enc_mlp),
+            dec,
+            ll,
+            dimY,
+            lowerbound=lowerbound,
+            K=10,
+            beta=1.0,
+        )
         X_ph = torch.zeros(1, *input_shape).to(next(encoder.parameters()).device)
         Y_ph = torch.zeros(1, dimY).to(next(encoder.parameters()).device)
         _, eval_fn = construct_optimizer(X_ph, Y_ph, enc, dec, ll, K, vae_type)
@@ -204,17 +203,17 @@ def perform_attacks(
 
                     if attack == "Sticker":
                         adv_images = sticker_attack(images, epsilon)
-                    elif attack == "SPSA":
-                        adv_images = spsa(
+                    elif attack == "SimBA":
+                        adv_images = simba(
                             model,
                             images,
                             eps=epsilon,
-                            nb_iter=100,
-                            norm=np.inf,
+                            max_queries=2500,
+                            targeted=False,
+                            seed=29,
                             clip_min=0.0,
                             clip_max=1.0,
-                            delta=0.01,
-                            sanity_checks=False,
+                            pixel_attack=False,
                         )
                     elif attack == "Gaussian":
                         adv_images = gaussian_perturbation_attack(

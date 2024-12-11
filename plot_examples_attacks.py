@@ -5,17 +5,16 @@ from cleverhans.torch.attacks.fast_gradient_method import fast_gradient_method
 from cleverhans.torch.attacks.projected_gradient_descent import (
     projected_gradient_descent,
 )
-from cleverhans.torch.attacks.spsa import spsa
 from tqdm import tqdm
 
 from alg.vae_new import bayes_classifier
 from attack_black_box import load_model
-from attacks.black_box import gaussian_perturbation_attack, sticker_attack
+from attacks.black_box import gaussian_perturbation_attack, simba, sticker_attack
 from attacks.momentum_iterative_method import momentum_iterative_method
 from utils.utils import load_data
 
-vae_type = "B"
-data_name = "gtsrb"
+vae_type = "G"
+data_name = "mnist"
 infty = False
 bbox = True
 
@@ -74,19 +73,15 @@ epsilons = [0, 0.01, 0.02, 0.05, 0.1, 0.2]
 if bbox:
     images_adv = [
         [
-            spsa(
+            simba(
                 model,
                 images,
                 eps=eps,
-                nb_iter=10,
-                norm=np.inf,
-                clip_min=0.0,
-                clip_max=1.0,
-                delta=0.01,
-                sanity_checks=False,
-                early_stop_loss_threshold=1e-3,
+                max_queries=2500,
+                targeted=False,
+                seed=29,
             )
-            for eps in tqdm(epsilons, desc="SPSA")
+            for eps in tqdm(epsilons, desc="SimBA")
         ],
         [
             gaussian_perturbation_attack(images, eps=eps)
@@ -109,7 +104,7 @@ if bbox:
             else:
                 axes[i, j].set_title(f"eps={epsilons[j]}")
             if j == 0:
-                axes[i, j].set_ylabel(["SPSA", "Gaussian", "Sticker"][i])
+                axes[i, j].set_ylabel(["SimBA", "Gaussian", "Sticker"][i])
     plt.tight_layout()
     plt.savefig("attacks_bbox.png")
 
