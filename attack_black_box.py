@@ -1,10 +1,10 @@
 import argparse
 import json
 import os
+import random
 import warnings
 
 import matplotlib.pyplot as plt
-import numpy as np
 import torch
 from matplotlib import cm
 from tqdm import tqdm
@@ -114,12 +114,13 @@ def perform_attacks(
         save_dir (str): Directory to save results.
         device (torch.device): Device to load the model onto.
     """
+    random.seed(29)
     assert len(sticker_sizes) == len(
         epsilons
     ), "Length of sticker_sizes and epsilons must be the same."
     vae_types = ["A", "B", "C", "D", "E", "F", "G"]
 
-    attack_methods = ["SimBA", "Gaussian", "Sticker"]
+    attack_methods = ["Gaussian", "Sticker"]
     accuracies = {vae_type: {} for vae_type in vae_types}
     if os.path.exists(save_dir):
         warnings.warn(
@@ -203,18 +204,8 @@ def perform_attacks(
                     ), labels.to(next(encoder.parameters()).device)
 
                     if attack == "Sticker":
-                        adv_images = sticker_attack(images, epsilon)
-                    elif attack == "SimBA":
-                        adv_images = simba(
-                            model,
-                            images,
-                            eps=epsilon,
-                            max_queries=2500,
-                            targeted=False,
-                            seed=29,
-                            clip_min=0.0,
-                            clip_max=1.0,
-                            pixel_attack=False,
+                        adv_images = sticker_attack(
+                            images, epsilon, n_channels=input_shape[0]
                         )
                     elif attack == "Gaussian":
                         adv_images = gaussian_perturbation_attack(
