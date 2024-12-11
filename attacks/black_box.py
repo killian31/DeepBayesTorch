@@ -74,7 +74,7 @@ def simba(
         np.random.shuffle(indices)
     elif order == "diagonal":
         # Diagonal order (low to high frequency)
-        pass  # Implement if needed
+        pass  # TODO (not needed for our experiment)
     else:
         raise ValueError("Order must be 'random' or 'diagonal'.")
 

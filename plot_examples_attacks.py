@@ -9,17 +9,17 @@ from tqdm import tqdm
 
 from alg.vae_new import bayes_classifier
 from attack_black_box import load_model
-from attacks.black_box import gaussian_perturbation_attack, simba, sticker_attack
+from attacks.black_box import gaussian_perturbation_attack, sticker_attack
 from attacks.momentum_iterative_method import momentum_iterative_method
-from utils.utils import load_data
+from utils.utils import CLASS_LABELS, load_data
 
-vae_type = "G"
+vae_type = "D"
 data_name = "gtsrb"
-infty = False
+infty = True
 bbox = True
 
 
-_, test_dataset = load_data(data_name, path="./data", labels=None, conv=True)
+_, test_dataset = load_data(data_name, path="./data", labels=[2], conv=True)
 test_dataset = torch.utils.data.Subset(test_dataset, range(1))
 images, _ = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=1)))
 images = images.to("cuda" if torch.cuda.is_available() else "cpu")
@@ -73,17 +73,6 @@ epsilons = [0, 0.01, 0.02, 0.05, 0.1, 0.2]
 if bbox:
     images_adv = [
         [
-            simba(
-                model,
-                images,
-                eps=eps,
-                max_queries=2500,
-                targeted=False,
-                seed=29,
-            )
-            for eps in tqdm(epsilons, desc="SimBA")
-        ],
-        [
             gaussian_perturbation_attack(images, eps=eps)
             for eps in tqdm(epsilons, desc="Gaussian")
         ],
@@ -93,20 +82,32 @@ if bbox:
         ],
     ]
 
+    # compute predictions for each attack for each epsilon
+    predictions = []
+    for i, img in enumerate(images_adv):
+        predictions.append(
+            [
+                model(image).argmax(dim=1).item()
+                for image in [img[j].detach().cpu() for j in range(len(img))]
+            ]
+        )
+
     # Plot images (one line per attack)
-    fig, axes = plt.subplots(3, len(epsilons), figsize=(12, 6))
+    fig, axes = plt.subplots(len(images_adv), len(epsilons), figsize=(14, 8))
     for i, img in enumerate(images_adv):
         for j, image in enumerate(img):
             axes[i, j].imshow(image[0].permute(1, 2, 0).cpu().numpy())
             axes[i, j].axis("off")
             if i == 0:
-                axes[i, j].set_title(f"eps={sticker_sizes[j]}")
+                axes[i, j].set_title(
+                    f"eps={sticker_sizes[j]}\n p={CLASS_LABELS[predictions[i][j]]}"
+                )
             else:
-                axes[i, j].set_title(f"eps={epsilons[j]}")
-            if j == 0:
-                axes[i, j].set_ylabel(["SimBA", "Gaussian", "Sticker"][i])
+                axes[i, j].set_title(
+                    f"eps={epsilons[j]}\n p={CLASS_LABELS[predictions[i][j]]}"
+                )
     plt.tight_layout()
-    plt.savefig("attacks_bbox.png")
+    plt.savefig(f"attacks_bbox_{data_name}_{vae_type}.png")
 
 
 if infty:
@@ -130,7 +131,7 @@ if infty:
                 images,
                 eps=eps,
                 eps_iter=0.01,
-                nb_iter=100,
+                nb_iter=40,
                 norm=np.inf,
                 clip_min=0.0,
                 clip_max=1.0,
@@ -145,7 +146,7 @@ if infty:
                 images,
                 eps=eps,
                 eps_iter=0.01,
-                nb_iter=100,
+                nb_iter=40,
                 decay_factor=1.0,
                 norm=np.inf,
                 clip_min=0.0,
@@ -156,6 +157,15 @@ if infty:
         ],
     ]
 
+    predictions = []
+    for i, img in enumerate(images_adv):
+        predictions.append(
+            [
+                model(image).argmax(dim=1).item()
+                for image in [img[j].detach().cpu() for j in range(len(img))]
+            ]
+        )
+
     # Plot images (one line per attack)
     fig, axes = plt.subplots(3, len(epsilons), figsize=(12, 6))
     for i, images in enumerate(images_adv):
@@ -163,9 +173,8 @@ if infty:
             image = image.detach().cpu()
             axes[i, j].imshow(image[0].permute(1, 2, 0).numpy())
             axes[i, j].axis("off")
-            if i == 0:
-                axes[i, j].set_title(f"eps={epsilons[j]}")
-            if j == 0:
-                axes[i, j].set_ylabel(["FGSM", "PGD", "MIM"][i])
+            axes[i, j].set_title(
+                f"eps={epsilons[j]}\n p={CLASS_LABELS[predictions[i][j]]}"
+            )
     plt.tight_layout()
-    plt.savefig("attacks_infty.png")
+    plt.savefig(f"attacks_infty_{data_name}_{vae_type}.png")
