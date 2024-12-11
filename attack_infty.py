@@ -184,12 +184,12 @@ def perform_attacks(
                     y_clean_logits.append(y_pred_clean_logit.detach().cpu())
 
                 # Concatenate and save results
-                x_adv = np.concatenate(x_adv, axis=0)
-                y_adv = np.concatenate(y_adv, axis=0)
-                y_adv_logits = np.concatenate(y_adv_logits, axis=0)
-                x_clean = np.concatenate(x_clean, axis=0)
-                y_adv_logits = np.concatenate(y_adv_logits, axis=0)
-                y_clean = np.concatenate(y_clean, axis=0)
+                x_adv = torch.cat(x_adv, dim=0)
+                y_adv = torch.cat(y_adv, dim=0)
+                y_adv_logits = torch.cat(y_adv_logits, dim=0)
+                x_clean = torch.cat(x_clean, dim=0)
+                y_clean = torch.cat(y_clean, dim=0)
+                y_clean_logits = torch.cat(y_clean_logits, dim=0)
 
                 save_path = os.path.join(
                     save_dir, f"{vae_type}_{attack}_{data_name}_epsilon_{epsilon}.pkl"
