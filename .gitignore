@@ -5,3 +5,4 @@ data
 *.png
 .DS_Store
 *.zip
+mnist_results/
