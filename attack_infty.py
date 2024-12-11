@@ -105,10 +105,8 @@ def perform_attacks(
                 y_clean_logits = []
                 correct = 0
                 total = 0
-
-                for images, labels in tqdm(
-                    test_loader, desc=f"{attack}, epsilon={epsilon}"
-                ):
+                pbar = tqdm(total=len(test_loader), desc=f"{attack}, epsilon={epsilon}")
+                for images, labels in test_loader:
                     images, labels = images.to(
                         next(encoder.parameters()).device
                     ), labels.to(next(encoder.parameters()).device)
@@ -175,6 +173,7 @@ def perform_attacks(
                     )
                     correct += (torch.argmax(y_pred_adv, dim=1) == labels).sum().item()
                     total += labels.size(0)
+                    pbar.update(1)
 
                     # Save batch data
                     x_adv.append(adv_images.detach().cpu())
@@ -210,6 +209,7 @@ def perform_attacks(
                 print(
                     f"Param value: {epsilon}, VAE type: {vae_type}, Attack: {attack}, Accuracy: {correct / total}"
                 )
+                pbar.close()
 
     with open(
         os.path.join(save_dir, f"{data_name}_accuracy_vs_epsilon.json"), "w"
