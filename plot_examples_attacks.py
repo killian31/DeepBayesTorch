@@ -14,7 +14,7 @@ from attacks.momentum_iterative_method import momentum_iterative_method
 from utils.utils import load_data
 
 vae_type = "G"
-data_name = "mnist"
+data_name = "gtsrb"
 infty = False
 bbox = True
 
@@ -88,7 +88,7 @@ if bbox:
             for eps in tqdm(epsilons, desc="Gaussian")
         ],
         [
-            sticker_attack(images, sticker_size=eps)
+            sticker_attack(images, sticker_size=eps, n_channels=3)
             for eps in tqdm(sticker_sizes, desc="Sticker")
         ],
     ]
