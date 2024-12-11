@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import pickle
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,92 +15,7 @@ from tqdm import tqdm
 
 from alg.vae_new import bayes_classifier, construct_optimizer
 from attacks.momentum_iterative_method import momentum_iterative_method
-from utils.utils import load_data, load_params
-
-
-def load_model(data_name, vae_type, checkpoint_index, device=None):
-    """
-    Load a trained model with given parameters.
-
-    Args:
-        data_name (str): Dataset name (e.g., 'mnist').
-        vae_type (str): Model type ('A', 'B', ..., 'G').
-        checkpoint_index (int): Index of the checkpoint to load.
-        dimZ (int, optional): Latent dimension. Default is 64.
-        dimH (int, optional): Hidden layer size. Default is 500.
-        device (torch.device, optional): Device to load the model onto.
-
-    Returns:
-        encoder, generator: The loaded encoder and generator models.
-    """
-    if data_name == "mnist":
-        if vae_type == "A":
-            from models.conv_generator_mnist_A import Generator
-        elif vae_type == "B":
-            from models.conv_generator_mnist_B import Generator
-        elif vae_type == "C":
-            from models.conv_generator_mnist_C import Generator
-        elif vae_type == "D":
-            from models.conv_generator_mnist_D import Generator
-        elif vae_type == "E":
-            from models.conv_generator_mnist_E import Generator
-        elif vae_type == "F":
-            from models.conv_generator_mnist_F import Generator
-        elif vae_type == "G":
-            from models.conv_generator_mnist_G import Generator
-        else:
-            raise ValueError(f"Unknown VAE type: {vae_type}")
-        from models.conv_encoder_mnist import GaussianConvEncoder as Encoder
-
-        input_shape = (1, 28, 28)
-        n_channel = 64
-        dimZ = 64
-        dimH = 500
-        dimY = 10
-    elif data_name == "cifar10" or data_name == "gtsrb":
-        if vae_type == "A":
-            from models.conv_generator_cifar10_A import Generator
-        elif vae_type == "B":
-            from models.conv_generator_cifar10_B import Generator
-        elif vae_type == "C":
-            from models.conv_generator_cifar10_C import Generator
-        elif vae_type == "D":
-            from models.conv_generator_cifar10_D import Generator
-        elif vae_type == "E":
-            from models.conv_generator_cifar10_E import Generator
-        elif vae_type == "F":
-            from models.conv_generator_cifar10_F import Generator
-        elif vae_type == "G":
-            from models.conv_generator_cifar10_G import Generator
-        else:
-            raise ValueError(f"Unknown VAE type: {vae_type}")
-        from models.conv_encoder_cifar10 import GaussianConvEncoder as Encoder
-
-        input_shape = (3, 32, 32)
-        n_channel = 128
-        dimZ = 128
-        dimH = 1000
-        dimY = 10
-    else:
-        raise ValueError(f"Unknown dataset: {data_name}")
-
-    if data_name == "gtsrb":
-        dimY = 43
-
-    generator = Generator(input_shape, dimH, dimZ, dimY, n_channel, "sigmoid", "gen")
-    encoder = Encoder(input_shape, dimH, dimZ, dimY, n_channel, "enc")
-
-    path_name = f"{data_name}_conv_vae_{vae_type}_{dimZ}/"
-    filename = f"save/{path_name}checkpoint"
-
-    load_params((encoder, generator), filename, checkpoint_index)
-
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    encoder = encoder.to(device)
-    generator = generator.to(device)
-
-    return encoder, generator
+from utils.utils import load_data, load_model
 
 
 def perform_attacks(
@@ -163,12 +79,14 @@ def perform_attacks(
             lowerbound=lowerbound,
             K=10,
             beta=1.0,
-        )
+        )[0]
         X_ph = torch.zeros(1, *input_shape).to(next(encoder.parameters()).device)
         Y_ph = torch.zeros(1, dimY).to(next(encoder.parameters()).device)
         _, eval_fn = construct_optimizer(X_ph, Y_ph, enc, dec, ll, K, vae_type)
 
         _, test_dataset = load_data(data_name, path="./data", labels=None, conv=True)
+        # subset for debug
+        test_dataset = torch.utils.data.Subset(test_dataset, range(10))
         test_loader = torch.utils.data.DataLoader(
             test_dataset, batch_size=batch_size, shuffle=False
         )
@@ -179,6 +97,12 @@ def perform_attacks(
 
         for epsilon in epsilons:
             for attack in attack_methods:
+                x_adv = []
+                x_clean = []
+                y_adv = []
+                y_adv_logits = []
+                y_clean = []
+                y_clean_logits = []
                 correct = 0
                 total = 0
                 pbar = tqdm(total=len(test_loader), desc=f"{attack}, epsilon={epsilon}")
@@ -226,7 +150,18 @@ def perform_attacks(
                     else:
                         raise ValueError(f"Unsupported attack: {attack}")
 
-                    y_pred = bayes_classifier(
+                    y_pred_clean, y_pred_clean_logit = bayes_classifier(
+                        images,
+                        (enc_conv, enc_mlp),
+                        dec,
+                        ll,
+                        dimY,
+                        lowerbound=lowerbound,
+                        K=10,
+                        beta=1.0,
+                    )
+
+                    y_pred_adv, y_pred_adv_logit = bayes_classifier(
                         adv_images,
                         (enc_conv, enc_mlp),
                         dec,
@@ -236,13 +171,45 @@ def perform_attacks(
                         K=10,
                         beta=1.0,
                     )
-                    correct += (torch.argmax(y_pred, dim=1) == labels).sum().item()
+                    correct += (torch.argmax(y_pred_adv, dim=1) == labels).sum().item()
                     total += labels.size(0)
                     pbar.update(1)
 
+                    # Save batch data
+                    x_adv.append(adv_images.detach().cpu())
+                    y_adv.append(y_pred_adv.detach().cpu())
+                    y_adv_logits.append(y_pred_adv_logit.detach().cpu())
+                    x_clean.append(images.detach().cpu())
+                    y_clean.append(y_pred_clean.detach().cpu())
+                    y_clean_logits.append(y_pred_clean_logit.detach().cpu())
+
+                # Concatenate and save results
+                x_adv = np.concatenate(x_adv, axis=0)
+                y_adv = np.concatenate(y_adv, axis=0)
+                y_adv_logits = np.concatenate(y_adv_logits, axis=0)
+                x_clean = np.concatenate(x_clean, axis=0)
+                y_adv_logits = np.concatenate(y_adv_logits, axis=0)
+                y_clean = np.concatenate(y_clean, axis=0)
+
+                save_path = os.path.join(
+                    save_dir, f"{vae_type}_{attack}_{data_name}_epsilon_{epsilon}.pkl"
+                )
+                results = {
+                    "x_adv": x_adv,
+                    "y_adv": y_adv,
+                    "y_adv_logits": y_adv_logits,
+                    "x_clean": x_clean,
+                    "y_clean": y_clean,
+                    "y_clean_logits": y_clean_logits,
+                }
+                with open(save_path, "wb") as f:
+                    pickle.dump(results, f)
+                print(f"Adversarial examples saved at {save_path}.")
                 accuracies[vae_type][attack].append(correct / total)
+                print(
+                    f"Param value: {epsilon}, VAE type: {vae_type}, Attack: {attack}, Accuracy: {correct / total}"
+                )
                 pbar.close()
-                print(f"{attack}, epsilon={epsilon}, acc={correct/total:.4f}")
 
     with open(
         os.path.join(save_dir, f"{data_name}_accuracy_vs_epsilon.json"), "w"
