@@ -1,17 +1,19 @@
 import argparse
 import json
 import os
+import pickle
 import random
 import warnings
 
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from matplotlib import cm
 from tqdm import tqdm
 
 from alg.vae_new import bayes_classifier, construct_optimizer
 from attacks.black_box import gaussian_perturbation_attack, sticker_attack
-from utils.utils import load_data, load_model, load_params
+from utils.utils import load_data, load_model
 
 
 def perform_attacks(
@@ -84,16 +86,7 @@ def perform_attacks(
         enc_conv = encoder.encoder_conv
         enc_mlp = encoder.enc_mlp
         enc = (enc_conv, enc_mlp)
-        model = lambda x: bayes_classifier(
-            x,
-            (enc_conv, enc_mlp),
-            dec,
-            ll,
-            dimY,
-            lowerbound=lowerbound,
-            K=10,
-            beta=1.0,
-        )
+
         X_ph = torch.zeros(1, *input_shape).to(next(encoder.parameters()).device)
         Y_ph = torch.zeros(1, dimY).to(next(encoder.parameters()).device)
         _, eval_fn = construct_optimizer(X_ph, Y_ph, enc, dec, ll, K, vae_type)
@@ -106,7 +99,12 @@ def perform_attacks(
                     epsilon = sticker_sizes[i]
                 else:
                     epsilon = epsilons[i]
-
+                x_adv = []
+                x_clean = []
+                y_adv = []
+                y_adv_logits = []
+                y_clean = []
+                y_clean_logits = []
                 correct = 0
                 total = 0
 
@@ -128,7 +126,18 @@ def perform_attacks(
                     else:
                         raise ValueError(f"Unsupported attack: {attack}")
 
-                y_pred = bayes_classifier(
+                    y_pred_clean, y_pred_clean_logit = bayes_classifier(
+                        images,
+                        (enc_conv, enc_mlp),
+                        dec,
+                        ll,
+                        dimY,
+                        lowerbound=lowerbound,
+                        K=10,
+                        beta=1.0,
+                    )
+
+                    y_pred_adv, y_pred_adv_logit = bayes_classifier(
                         adv_images,
                         (enc_conv, enc_mlp),
                         dec,
@@ -138,9 +147,43 @@ def perform_attacks(
                         K=10,
                         beta=1.0,
                     )
-                    correct += (torch.argmax(y_pred, dim=1) == labels).sum().item()
+                    correct += (torch.argmax(y_pred_adv, dim=1) == labels).sum().item()
                     total += labels.size(0)
 
+                    # Save batch data
+                    x_adv.append(adv_images.detach().cpu())
+                    y_adv.append(y_pred_adv.detach().cpu())
+                    y_adv_logits.append(y_pred_adv_logit.detach().cpu())
+                    x_clean.append(images.detach().cpu())
+                    y_clean.append(y_pred_clean.detach().cpu())
+                    y_clean_logits.append(y_pred_clean_logit.detach().cpu())
+
+                # Concatenate and save results
+                x_adv = np.concatenate(x_adv, axis=0)
+                y_adv = np.concatenate(y_adv, axis=0)
+                y_adv_logits = np.concatenate(y_adv_logits, axis=0)
+                x_clean = np.concatenate(x_clean, axis=0)
+                y_adv_logits = np.concatenate(y_adv_logits, axis=0)
+                y_clean = np.concatenate(y_clean, axis=0)
+
+                save_path = os.path.join(
+                    save_dir, f"{vae_type}_{attack}_{data_name}_epsilon_{epsilon}.pkl"
+                )
+                results = {
+                    "x_adv": x_adv,
+                    "y_adv": y_adv,
+                    "y_adv_logits": y_adv_logits,
+                    "x_clean": x_clean,
+                    "y_clean": y_clean,
+                    "y_clean_logits": y_clean_logits,
+                }
+                with open(save_path, "wb") as f:
+                    pickle.dump(results, f)
+                print(f"Adversarial examples saved at {save_path}.")
+                accuracies[vae_type][attack].append(correct / total)
+                print(
+                    f"Param value: {epsilon}, VAE type: {vae_type}, Attack: {attack}, Accuracy: {correct / total}"
+                )
                 accuracies[vae_type][attack].append(correct / total)
                 print(
                     f"Param value: {epsilon}, VAE type: {vae_type}, Attack: {attack}, Accuracy: {correct / total}"
