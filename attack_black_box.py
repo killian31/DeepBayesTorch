@@ -1,7 +1,7 @@
 import argparse
-import random
 import json
 import os
+import random
 import warnings
 
 import matplotlib.pyplot as plt
@@ -133,7 +133,9 @@ def perform_attacks(
     K = 10
     _, test_dataset = load_data(data_name, path="./data", labels=None, conv=True)
     # take a subset for debug
-    test_dataset = torch.utils.data.Subset(test_dataset, random.sample(range(len(test_dataset)), 1300))
+    test_dataset = torch.utils.data.Subset(
+        test_dataset, random.sample(range(len(test_dataset)), 1300)
+    )
     test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=batch_size, shuffle=False
     )
@@ -239,7 +241,9 @@ def perform_attacks(
     return accuracies
 
 
-def plot_results(json_file, save_dir, data_name, sticker_sizes, epsilons):
+def plot_results(
+    json_file, save_dir, data_name, sticker_sizes, epsilons, vertical=False
+):
     with open(json_file, "r") as f:
         accuracies = json.load(f)
     vae_types = list(accuracies.keys())
@@ -253,7 +257,10 @@ def plot_results(json_file, save_dir, data_name, sticker_sizes, epsilons):
         "F": "DFZ",
         "G": "DBX",
     }
-    fig, axes = plt.subplots(len(attack_methods), 1, figsize=(4, 12))
+    if vertical:
+        fig, axes = plt.subplots(len(attack_methods), 1, figsize=(4, 12))
+    else:
+        fig, axes = plt.subplots(1, len(attack_methods), figsize=(12, 4))
     num_vae_types = len(vae_types)
     cmap = cm.get_cmap("rainbow", num_vae_types)
     for i, attack in enumerate(attack_methods):
