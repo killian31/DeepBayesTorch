@@ -77,7 +77,7 @@ def comp_logp(logit, y, text, comp_logit_dist=False):
         ind = torch.where(y[:, i] == 1)[0]
         if len(ind) > 0:
             logpxy_mean.append(torch.mean(logpxy[ind]))
-            logpxy_std.append(torch.sqrt(torch.var(logpxy[ind])))
+            logpxy_std.append(torch.sqrt(torch.var(logpxy[ind], unbiased=False)))
         else:
             # If no samples for this class, just append NaNs
             logpxy_mean.append(float('nan'))
@@ -134,7 +134,7 @@ def comp_logp(logit, y, text, comp_logit_dist=False):
                 for sample_idx in range(pi.shape[0]):
                     kl_val = torch.sum(softmax_mean * (torch.log(softmax_mean) - logit_tmp[sample_idx]))
                     kl_vals.append(kl_val)
-                kl_vals = torch.array(kl_vals)
+                kl_vals = torch.Tensor(kl_vals)
                 logit_kl_mean.append(torch.mean(kl_vals))
                 logit_kl_std.append(torch.sqrt(torch.var(kl_vals)))
             else:
@@ -224,40 +224,42 @@ def test_attacks(
 
     dimY = 10 if data_name != "gtsrb" else 43
     for epsilon in epsilons:
-        print(f"Running detection for epsilon={epsilon}")
+        print(f"-----------------  Running detection for epsilon={epsilon}  ---------------------")
         # Craft adversarial examples
         filename_data = f"{guard_name}_{attack_method}_{data_name}_epsilon_{epsilon}.pkl"
         file_path = os.path.join(path_data, filename_data)
         if os.path.exists(file_path):
             with open(file_path, 'rb') as f:
                 data= pickle.load(f)
-                x_clean = torch.Tensor(data['x_clean'][0])
-                y_clean = torch.Tensor(data['y_clean'][0])
-                x_adv = torch.Tensor(data['x_adv'][0])
-                y_adv = torch.Tensor(data['y_adv'][0])
-                y_logit_clean = torch.Tensor(data['y_clean_logits'][0])
-                y_logit_adv = torch.Tensor(data['y_adv_logits'][0])
+                x_clean = data['x_clean']
+                y_clean = data['y_clean']
+                x_adv = data['x_adv']
+                y_adv = data['y_adv']
+                y_logit_clean = data['y_clean_logits']
+                y_logit_adv = data['y_adv_logits']
         else:
             raise ValueError(f"File {file_path} not found, probably the attack has not be performed for epsilon={epsilon}.")
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(torch.argmax(y_adv, dim=1))
+        print(torch.argmax(y_clean, dim=1))
         # Identify successful attacks (where victim's adv prediction != clean label)
         correct_prediction = (torch.argmax(y_adv, dim=1) == torch.argmax(y_clean, dim=1))
-        success_rate = 100.0 * (1 - torch.mean(correct_prediction.to(torch.float32)))
-        ind_success = torch.where(correct_prediction == 0)[0]
+        success_rate = 100.0 * (torch.mean(correct_prediction.to(torch.float32)))
+        ind_success = torch.where(correct_prediction)[0]
 
         if len(ind_success) == 0:
-            print('No successful attacks found.')
-            return {}
+            print("The attack has 0% success rate in the classifier.")
+            diff = torch.zeros_like(x_clean)
+        else:
+            diff = x_adv[ind_success] - x_clean[ind_success]
 
         # Compute L2, L0, L_inf perturbations for successful attacks
-        diff = x_adv[ind_success] - x_clean[ind_success]
+        
         l2_diff = torch.sqrt(torch.sum(diff**2, dim=(1, 2, 3)))
         li_diff = torch.amax(torch.abs(diff), dim=(1, 2, 3))
         l0_diff = torch.sum(diff != 0, dim=(1, 2, 3))
-        print('perturb for successful attack: L_2 = %.3f +- %.3f' % (torch.mean(l2_diff), torch.sqrt(torch.var(l2_diff))))
-        print('perturb for successful attack: L_inf = %.3f +- %.3f' % (torch.mean(li_diff), torch.sqrt(torch.var(li_diff))))
-        print('perturb for successful attack: L_0 = %.3f +- %.3f' % (torch.mean(l0_diff.to(torch.float32)), torch.sqrt(torch.var(l0_diff.to(torch.float32)))))
+        print('perturb for successful attack: L_2 = %.3f +- %.3f' % (torch.mean(l2_diff), torch.sqrt(torch.var(l2_diff, unbiased=False))))
+        print('perturb for successful attack: L_inf = %.3f +- %.3f' % (torch.mean(li_diff), torch.sqrt(torch.var(li_diff,unbiased=False))))
+        print('perturb for successful attack: L_0 = %.3f +- %.3f' % (torch.mean(l0_diff.to(torch.float32)), torch.sqrt(torch.var(l0_diff.to(torch.float32), unbiased=False))))
 
         # y_adv and y_clean are not one-hot labels, we need to convert them
         y_clean_one_hot = F.one_hot(torch.argmax(y_clean, dim=1), num_classes=dimY).to(torch.float32)
@@ -277,8 +279,8 @@ def test_attacks(
         alpha, detect_rate = search_alpha(results_clean[0], results_clean[1], results_clean[2], plus=plus)
         fp_logpx = comp_detect(results_clean[0], results_clean[1], results_clean[2], alpha, plus=plus)
         tp_logpx = comp_detect(results_adv[0], results_clean[1], results_clean[2], alpha, plus=plus)
-        print('false alarm rate (logp(x)):', fp_logpx)
-        print('detection rate (logp(x)):', tp_logpx)
+        print('false alarm rate (logp(x)):', fp_logpx.item())
+        print('detection rate (logp(x)):', tp_logpx.item())
 
         # Detection based on logp(x|y)
         fp_rate = []
@@ -297,13 +299,13 @@ def test_attacks(
             tp_c = comp_detect(results_adv[3][adv_ind], results_clean[4][i], results_clean[5][i], alpha_c, plus=plus)
             tp_rate_vals.append(tp_c)
         if len(tp_rate_vals) > 0:
-            FP_logpxy = torch.mean(fp_rate)
-            TP_logpxy = torch.mean(tp_rate_vals)
+            FP_logpxy = torch.mean(torch.Tensor(fp_rate))
+            TP_logpxy = torch.mean(torch.Tensor(tp_rate_vals))
         else:
             FP_logpxy = torch.nan
             TP_logpxy = torch.nan
-        print('false alarm rate (logp(x|y)):', FP_logpxy)
-        print('detection rate (logp(x|y)):', TP_logpxy)
+        print('false alarm rate (logp(x|y)):', FP_logpxy.item())
+        print('detection rate (logp(x|y)):', TP_logpxy.item())
 
         # KL-based detection
         # Extract the logit distribution stats from training
@@ -338,31 +340,31 @@ def test_attacks(
             if len(adv_ind) == 0:
                 continue
             logit_adv_i = y_logit_adv[ind_success][adv_ind]
-            logit_tmp_adv = logit_adv_i - torch.logsumexp(logit_adv_i, axis=0)[:, torch.newaxis]
+            logit_tmp_adv = logit_adv_i - torch.logsumexp(logit_adv_i, dim=0, keepdim=True)
             pi_adv = torch.exp(logit_tmp_adv)
             kl_values_adv = []
             for j in range(pi_adv.shape[0]):
                 kl_val = torch.sum(pmean * (torch.log(pmean) - logit_tmp_adv[j]))
                 kl_values_adv.append(kl_val)
-            kl_values_adv = torch.array(kl_values_adv)
+            kl_values_adv = torch.Tensor(kl_values_adv)
             tp_c = comp_detect(kl_values_adv, kl_mean[i], kl_std[i], alpha_c, plus=True)
             tp_rate_kl.append(tp_c)
         if len(tp_rate_kl) > 0:
-            FP_kl = torch.mean(fp_rate_kl)
-            TP_kl = torch.mean(tp_rate_kl)
+            FP_kl = torch.mean(torch.Tensor(fp_rate_kl))
+            TP_kl = torch.mean(torch.Tensor(tp_rate_kl))
         else:
             FP_kl = torch.nan
             TP_kl = torch.nan
-        print('false alarm rate (KL):', FP_kl)
-        print('detection rate (KL):', TP_kl)
+        print('false alarm rate (KL):', FP_kl.item())
+        print('detection rate (KL):', TP_kl.item())
 
         success_rate_list.append(success_rate)
         l2_diff_mean_list.append(torch.mean(l2_diff))
-        l2_diff_std_list.append(torch.sqrt(torch.var(l2_diff)))
-        l0_diff_mean_list.append(torch.mean(l0_diff.to(torch.float32)))
-        l0_diff_std_list.append(torch.sqrt(torch.var(l0_diff.to(torch.float32))))
+        l2_diff_std_list.append(torch.sqrt(torch.var(l2_diff, unbiased=False)))
+        l0_diff_mean_list.append(torch.mean(l0_diff.to(torch.float32))) 
+        l0_diff_std_list.append(torch.sqrt(torch.var(l0_diff.to(torch.float32), unbiased=False)))
         li_diff_mean_list.append(torch.mean(li_diff))
-        li_diff_std_list.append(torch.sqrt(torch.var(li_diff)))
+        li_diff_std_list.append(torch.sqrt(torch.var(li_diff, unbiased=False)))
         fp_logpx_list.append(fp_logpx)
         tp_logpx_list.append(tp_logpx)
         FP_logpxy_list.append(FP_logpxy)
@@ -405,6 +407,21 @@ def test_attacks(
 
     return results
 
+def plot_detection_rate(results, epsilons):
+    """
+    Plot detection rate for different epsilon values.
+    """
+    import matplotlib.pyplot as plt
+    print(results)
+    plt.plot(epsilons, results['tp_logpx'], label='logp(x)')
+    plt.plot(epsilons, results['TP_logpxy'], label='logp(x|y)')
+    plt.plot(epsilons, results['TP_kl'], label='KL')
+    plt.legend()
+    plt.xlabel('epsilon')
+    plt.ylabel('detection rate')
+    plt.title('Detection rate for different epsilon values')
+    plt.show()
+
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Evaluate detection metrics on clean and adversarial examples.')
 
@@ -440,7 +457,7 @@ if __name__=="__main__":
         "--epsilons",
         type=float,
         nargs="+",
-        default=[0.1, 0.2, 0.3, 0.4, 0.5],
+        default=[0, 0.1, 0.2, 0.3, 0.4, 0.5],
         help="List of epsilon values for FGSM attack.",
     )
     parser.add_argument('--batch_size', '-B', type=int, default=100)
@@ -456,3 +473,4 @@ if __name__=="__main__":
         targeted=args.targeted,
         save=args.save
     )
+    plot_detection_rate(result, args.epsilons)
