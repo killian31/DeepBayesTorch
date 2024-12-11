@@ -239,8 +239,7 @@ def test_attacks(
                 y_logit_adv = data['y_adv_logits']
         else:
             raise ValueError(f"File {file_path} not found, probably the attack has not be performed for epsilon={epsilon}.")
-        print(torch.argmax(y_adv, dim=1))
-        print(torch.argmax(y_clean, dim=1))
+
         # Identify successful attacks (where victim's adv prediction != clean label)
         correct_prediction = (torch.argmax(y_adv, dim=1) == torch.argmax(y_clean, dim=1))
         success_rate = 100.0 * (torch.mean(correct_prediction.to(torch.float32)))
@@ -412,7 +411,7 @@ def plot_detection_rate(results, epsilons):
     Plot detection rate for different epsilon values.
     """
     import matplotlib.pyplot as plt
-    print(results)
+
     plt.plot(epsilons, results['tp_logpx'], label='logp(x)')
     plt.plot(epsilons, results['TP_logpxy'], label='logp(x|y)')
     plt.plot(epsilons, results['TP_kl'], label='KL')
