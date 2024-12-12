@@ -1,11 +1,11 @@
 import argparse
 from tqdm import tqdm
-import os, pickle, sys
+import os, pickle, sys, json
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
+import numpy as np
 
 sys.path.append('../')
 sys.path.append('../utils/')
@@ -183,12 +183,10 @@ def search_alpha(x, x_mean, x_std, target_rate=5.0, plus=False):
 def test_attacks(
     attack_method: str,
     epsilons: list,
-    guard_name=str,
+    modele_attacked=str,
     path_data="./mnist_results",
     save=False, 
-    victim_name='mlp',
     data_name='mnist',
-    targeted=False
 ):
     """
     Evaluate detection metrics on clean and adversarial examples.
@@ -241,7 +239,7 @@ def test_attacks(
             FP_kl_list.append(0.0)
             TP_kl_list.append(0.0)
             continue
-        filename_data = f"{guard_name}_{attack_method}_{data_name}_epsilon_{epsilon}.pkl"
+        filename_data = f"{modele_attacked}_{attack_method}_{data_name}_epsilon_{epsilon}.pkl"
         file_path = os.path.join(path_data, filename_data)
         if os.path.exists(file_path):
             with open(file_path, 'rb') as f:
@@ -289,7 +287,7 @@ def test_attacks(
 
         # Detection based on logp(x)
         # If guard_name in ['mlp', 'cnn'], plus=True else False (following original logic)
-        plus = True if guard_name in ['mlp', 'cnn'] else False
+        plus = True if modele_attacked in ['mlp', 'cnn'] else False
         alpha, detect_rate = search_alpha(results_clean[0], results_clean[1], results_clean[2], plus=plus)
         fp_logpx = comp_detect(results_clean[0], results_clean[1], results_clean[2], alpha, plus=plus)
         tp_logpx = comp_detect(results_adv[0], results_clean[1], results_clean[2], alpha, plus=plus)
@@ -315,11 +313,13 @@ def test_attacks(
         if len(tp_rate_vals) > 0:
             FP_logpxy = torch.mean(torch.Tensor(fp_rate))
             TP_logpxy = torch.mean(torch.Tensor(tp_rate_vals))
+            print('false alarm rate (logp(x|y)):', FP_logpxy.item())
+            print('detection rate (logp(x|y)):', TP_logpxy.item())
         else:
             FP_logpxy = torch.nan
             TP_logpxy = torch.nan
-        print('false alarm rate (logp(x|y)):', FP_logpxy.item())
-        print('detection rate (logp(x|y)):', TP_logpxy.item())
+            print('false alarm rate (logp(x|y)):', FP_logpxy)
+            print('detection rate (logp(x|y)):', TP_logpxy)
 
         # KL-based detection
         # Extract the logit distribution stats from training
@@ -366,11 +366,13 @@ def test_attacks(
         if len(tp_rate_kl) > 0:
             FP_kl = torch.mean(torch.Tensor(fp_rate_kl))
             TP_kl = torch.mean(torch.Tensor(tp_rate_kl))
+            print('false alarm rate (KL):', FP_kl.item())
+            print('detection rate (KL):', TP_kl.item())
         else:
             FP_kl = torch.nan
             TP_kl = torch.nan
-        print('false alarm rate (KL):', FP_kl.item())
-        print('detection rate (KL):', TP_kl.item())
+            print('false alarm rate (KL):', FP_kl)
+            print('detection rate (KL):', TP_kl)
 
         success_rate_list.append(success_rate)
         l2_diff_mean_list.append(torch.mean(l2_diff))
@@ -386,42 +388,38 @@ def test_attacks(
         FP_kl_list.append(FP_kl)
         TP_kl_list.append(TP_kl)
 
-
     results = {
-        'success_rate': success_rate_list,
-        'l2_diff_mean': l2_diff_mean_list,
-        'l2_diff_std': l2_diff_std_list,
-        'l0_diff_mean': l0_diff_mean_list,
-        'l0_diff_std': l0_diff_std_list,
-        'li_diff_mean': li_diff_mean_list,
-        'li_diff_std': li_diff_std_list,
-        'fp_logpx': fp_logpx_list,
-        'tp_logpx': tp_logpx_list,
-        'FP_logpxy': FP_logpxy_list,
-        'TP_logpxy': TP_logpxy_list,
-        'FP_kl': FP_kl_list,
-        'TP_kl': TP_kl_list
+        'success_rate': list(np.array(success_rate_list)),
+        'l2_diff_mean': list(np.array(l2_diff_mean_list)),
+        'l2_diff_std': list(np.array(l2_diff_std_list)),
+        'l0_diff_mean': list(np.array(l0_diff_mean_list)),
+        'l0_diff_std': list(np.array(l0_diff_std_list)),
+        'li_diff_mean': list(np.array(li_diff_mean_list)),
+        'li_diff_std': list(np.array(li_diff_std_list)),
+        'fp_logpx': list(np.array(fp_logpx_list)),
+        'tp_logpx': list(np.array(tp_logpx_list)),
+        'FP_logpxy': list(np.array(FP_logpxy_list)),
+        'TP_logpxy': list(np.array(TP_logpxy_list)),
+        'FP_kl': list(np.array(FP_kl_list)),
+        'TP_kl': list(np.array(TP_kl_list))
     }
 
     # Optionally save results
     if save:
         if not os.path.exists('detection_results'):
             os.mkdir('detection_results')
-        path = os.path.join('detection_results', guard_name)
+        path = os.path.join('detection_results')
         if not os.path.exists(path):
             os.mkdir(path)
-        filename = f"{data_name}_{victim_name}"
-        if targeted:
-            filename += '_targeted'
-        else:
-            filename += '_untargeted'
-        filename += '.pkl'
-        pickle.dump(results, open(os.path.join(path, filename), 'wb'))
+        filename = f"{data_name}_{modele_attacked}_{attack_method}_detection_results"
+        filename += '.json'
+        with open(os.path.join(path, filename), 'w') as f:
+            json.dump(results, f)
         print("results saved at", os.path.join(path, filename))
 
     return results
 
-def plot_detection_rate(results, epsilons):
+def plot_detection_rate(results, epsilons, vae_type, attack):
     """
     Plot detection rate for different epsilon values.
     """
@@ -433,46 +431,41 @@ def plot_detection_rate(results, epsilons):
     plt.legend()
     plt.xlabel('epsilon')
     plt.ylabel('detection rate')
-    plt.title('Detection rate for different epsilon values')
+    plt.title('Detection rate for %s %s'%(vae_type, attack))
     plt.show()
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Evaluate detection metrics on clean and adversarial examples.')
 
-    parser.add_argument('--guard_name',
+    parser.add_argument('--model_attacked', '-M',
                         type=str,
                         default='A',
-                        help='Identifier for the "guard" model.')
-    parser.add_argument('--victim_name',
-                        type=str,
-                        default='mlp',
-                        help='Identifier for the victim model.')
+                        help='Identifier for the model attacked.')
     parser.add_argument('--attack',
                         '-A',
                         type=str,
                         default='FGSM')
+    parser.add_argument('--path_data',
+                        type=str,
+                        default='./mnist_results',
+                        help='Path to pkl files containing the data from the attacks.')
     parser.add_argument('--data_name',
                         type=str,
                         default='mnist',
                         help='Dataset name.')
-    parser.add_argument('--targeted',
-                        action='store_true',
-                        default=False,
-                        help='Whether the attack is targeted.')
     parser.add_argument('--save',
                         action='store_true',
                         default=False,
                         help='Whether to save results to disk.')
-    parser.add_argument('--ll',
-                        type=str,
-                        default='bernoulli',
-                        help='Likelihood type for the VAE model.')
-    parser.add_argument(
-        "--epsilons",
-        type=float,
-        nargs="+",
-        default=[0, 0.1, 0.2, 0.3, 0.4, 0.5],
-        help="List of epsilon values for FGSM attack.",
+    parser.add_argument('--plot',
+                        action='store_true',
+                        default=False,
+                        help='Whether to plot detection rate.')
+    parser.add_argument("--epsilons",
+                        type=float,
+                        nargs="+",
+                        default=[0, 0.1, 0.2, 0.3, 0.4, 0.5],
+                        help="List of epsilon values for FGSM attack.",
     )
     parser.add_argument('--batch_size', '-B', type=int, default=100)
     parser.add_argument('--conv', '-C', action='store_true', default=False)
@@ -481,10 +474,23 @@ if __name__=="__main__":
     result = test_attacks(
         attack_method=args.attack,
         epsilons=args.epsilons,
-        guard_name=args.guard_name,
-        victim_name=args.victim_name,
+        modele_attacked=args.model_attacked,
+        path_data=args.path_data,
         data_name=args.data_name,
-        targeted=args.targeted,
         save=args.save
     )
-    plot_detection_rate(result, args.epsilons)
+    plot_detection_rate(result, args.epsilons, args.model_attacked, args.attack)
+    # for vae in ['A', 'B', 'C', 'D', 'E', 'F', 'G']:
+    #     for attack in ['FGSM', 'PGD', 'MIM']:
+    #         args = parser.parse_args(['-M', vae, '-A', attack])
+    #         result = test_attacks(
+    #             attack_method=args.attack,
+    #             epsilons=args.epsilons,
+    #             modele_attacked=args.model_attacked,
+    #             path_data=args.path_data,
+    #             data_name=args.data_name,
+    #             save=args.save
+    #         )
+
+    #         plot_detection_rate(result, args.epsilons, args.model_attacked, args.attack)
+    
