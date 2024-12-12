@@ -225,7 +225,22 @@ def test_attacks(
     dimY = 10 if data_name != "gtsrb" else 43
     for epsilon in epsilons:
         print(f"-----------------  Running detection for epsilon={epsilon}  ---------------------")
-        # Craft adversarial examples
+        if epsilon == 0:
+            print(f"No successful adversarial samples for epsilon={epsilon}. Setting metrics to NaN.")
+            success_rate_list.append(0.0)
+            l2_diff_mean_list.append(0.0)
+            l2_diff_std_list.append(0.0)
+            l0_diff_mean_list.append(0.0)
+            l0_diff_std_list.append(0.0)
+            li_diff_mean_list.append(0.0)
+            li_diff_std_list.append(0.0)
+            fp_logpx_list.append(0.0)
+            tp_logpx_list.append(0.0)
+            FP_logpxy_list.append(0.0)
+            TP_logpxy_list.append(0.0)
+            FP_kl_list.append(0.0)
+            TP_kl_list.append(0.0)
+            continue
         filename_data = f"{guard_name}_{attack_method}_{data_name}_epsilon_{epsilon}.pkl"
         file_path = os.path.join(path_data, filename_data)
         if os.path.exists(file_path):
