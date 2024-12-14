@@ -3,6 +3,8 @@ import numpy as np
 import json
 from matplotlib import cm
 
+import argparse
+
 
 def comp_detect_rate(dict_result, detection_method):
     """
@@ -70,11 +72,12 @@ def plot_detection_rate(data_name, attack, epsilons, data_dir = "./detection_res
     cmap = cm.get_cmap("rainbow", num_vae_types)
 
     fig, axes = plt.subplots(1, len(detection_methods), figsize=(18, 6))
-
     for idx, detect_method in enumerate(detection_methods):
         ax = axes[idx]
         for j, vae_type in enumerate(vae_types):
             if vae_type in detection_rates[detect_method]:
+                if len(epsilons) != len(detection_rates[detect_method][vae_type]):
+                    raise ValueError("Length of epsilons and detection rates do not match : epsilons is length %i and dectection_rate is len %i."%(len(epsilons), len(detection_rates[detect_method][vae_type])))
                 ax.plot(
                     epsilons,
                     detection_rates[detect_method][vae_type],
@@ -91,13 +94,40 @@ def plot_detection_rate(data_name, attack, epsilons, data_dir = "./detection_res
 
     plt.tight_layout()
     save_path = f"{save_dir}/{data_name}_{attack}_detection_rates_subplots.png"
-    plt.savefig(save_path)
+    plt.savefig(
+        save_path, dpi=300, bbox_inches="tight"
+    )
     plt.close()
 
     print("Subplots saved successfully.")
 
 if __name__ == "__main__":
-    data_name = "MNIST"
-    attack = "PGD"
-    epsilons = [0, 0.1, 0.2, 0.3, 0.4, 0.5]
-    plot_detection_rate(data_name, attack, epsilons)
+    parser = argparse.ArgumentParser(description="Plot the detection rate of one attack on all the VAE for different values of epsilon.")
+    parser.add_argument("--data_name",
+                        type=str,
+                        default="mnist",
+                        help="Name of the dataset.")
+    parser.add_argument("--attack",
+                        type=str,
+                        default="FGSM",
+                        help="Name of the attack.")
+    parser.add_argument("--data_dir",
+                        type=str,
+                        default="./detection_results",
+                        help="Directory containing the detection results.")
+    parser.add_argument("--save_dir",
+                        type=str,
+                        default="./detection_results",
+                        help="Directory to save the plot.")
+    parser.add_argument("--epsilons",
+                        type=float,
+                        nargs="+",
+                        default=[0, 0.1, 0.2, 0.3, 0.4, 0.5],
+                        help="List of epsilon values for the attacks.")
+
+    args = parser.parse_args()
+    plot_detection_rate(data_name=args.data_name,
+                        attack=args.attack,
+                        epsilons=args.epsilons,
+                        data_dir=args.data_dir,
+                        save_dir=args.save_dir)
