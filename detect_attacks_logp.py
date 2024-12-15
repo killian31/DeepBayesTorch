@@ -55,8 +55,8 @@ def comp_logp(logit, y, text, comp_logit_dist=False):
     Compute log probabilities and related statistics.
 
     Args:
-        logit (ndarray): logits of shape (N, nb_classes).
-        y (ndarray): one-hot labels of shape (N, nb_classes).
+        logit (Tensor): logits of shape (N, nb_classes).
+        y (Tensor): one-hot labels of shape (N, nb_classes).
         text (str): Tag for printing results.
         comp_logit_dist (bool): Whether to compute distribution of logits.
 
@@ -149,11 +149,13 @@ def comp_logp(logit, y, text, comp_logit_dist=False):
 
     return results
 
-def comp_detect(x, x_mean, x_std, alpha, plus):
+def comp_detect(x: torch.Tensor, x_mean: torch.Tensor, x_std: torch.Tensor, alpha: float, plus: bool):
     """
     Compute detection rate given a criterion:
-    If plus=True: detect if x > x_mean + alpha * x_std
-    else: detect if x < x_mean - alpha * x_std
+    If plus=True: 
+        detect if x > x_mean + alpha * x_std
+    else: 
+        detect if x < x_mean - alpha * x_std
     """
     if plus:
         detect_rate = torch.mean((x > x_mean + alpha * x_std).float())
@@ -161,7 +163,7 @@ def comp_detect(x, x_mean, x_std, alpha, plus):
         detect_rate = torch.mean((x < x_mean - alpha * x_std).float())
     return detect_rate * 100
 
-def search_alpha(x, x_mean, x_std, target_rate=5.0, plus=False):
+def search_alpha(x: torch.Tensor, x_mean: torch.Tensor, x_std: torch.Tensor, target_rate=5.0, plus=False):
     """
     Binary search for alpha such that detection rate is close to target_rate.
     """
@@ -192,16 +194,12 @@ def test_attacks(
     Evaluate detection metrics on clean and adversarial examples.
 
     Args:
-        model (nn.Module): PyTorch model for evaluation.
-        x_train, y_train: Training samples (for baseline stats).
-        x_clean, y_clean: Clean test samples and labels.
-        x_adv, y_adv: Adversarial samples and corresponding predicted labels from victim model.
-        nb_classes (int): Number of classes.
+        attack_method (str): Name of the attack method performed.
+        epsilons (list): List of epsilon values for the attack.
+        modele_attacked (str): Identifier for the model attacked.
+        path_data (str): Path to pkl files containing the data from the attacks.
         save (bool): Whether to save results to disk.
-        guard_name (str): Identifier for the "guard" model.
-        victim_name (str): Identifier for the victim model.
-        data_name (str): Dataset name.
-        targeted (bool): Whether the attack is targeted.
+        data_name (str): Name of the dataset.
 
     Returns:
         results (dict): Dictionary of detection statistics.
@@ -224,7 +222,15 @@ def test_attacks(
     for epsilon in epsilons:
         print(f"-----------------  Running detection for epsilon={epsilon}  ---------------------")
         if epsilon == 0:
-            print(f"No successful adversarial samples for epsilon={epsilon}. Setting metrics to NaN.")
+            print('perturb for successful attack: L_2 = %.3f +- %.3f' % (0.0, 0.0))
+            print('perturb for successful attack: L_inf = %.3f +- %.3f' % (0.0, 0.0))
+            print('perturb for successful attack: L_0 = %.3f +- %.3f' % (0.0, 0.0))
+            print('false alarm rate (logp(x)):', 0.0)
+            print('detection rate (logp(x)):', 0.0)
+            print('false alarm rate (logp(x|y)):', 0.0)
+            print('detection rate (logp(x|y)):', 0.0)
+            print('false alarm rate (KL):', 0.0)
+            print('detection rate (KL):', 0.0)
             success_rate_list.append(0.0)
             l2_diff_mean_list.append(0.0)
             l2_diff_std_list.append(0.0)

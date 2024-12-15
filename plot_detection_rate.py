@@ -25,7 +25,7 @@ def comp_detect_rate(dict_result, detection_method):
 
     if detection_method == "Marginal":
         return dict_result["tp_logpx"]
-    elif detection_method == "Joint":
+    elif detection_method == "Logit":
         return dict_result["TP_logpxy"]
     elif detection_method == "KL":
         return dict_result["TP_kl"]
@@ -47,7 +47,7 @@ def plot_detection_rate(data_name, attack, epsilons, data_dir = "./detection_res
     """
     
     vae_types = ["A", "B", "C", "D", "E", "F", "G"]
-    detection_methods = ["Marginal", "Joint", "KL"]
+    detection_methods = ["Marginal", "Logit", "KL"]
     detection_rates = {detect_method: {} for detect_method in detection_methods}
 
     for detect_method in detection_methods:
@@ -78,15 +78,16 @@ def plot_detection_rate(data_name, attack, epsilons, data_dir = "./detection_res
             if vae_type in detection_rates[detect_method]:
                 if len(epsilons) != len(detection_rates[detect_method][vae_type]):
                     raise ValueError("Length of epsilons and detection rates do not match : epsilons is length %i and dectection_rate is len %i."%(len(epsilons), len(detection_rates[detect_method][vae_type])))
+                detection_rates[detect_method][vae_type] = np.array(detection_rates[detect_method][vae_type])
                 ax.plot(
                     epsilons,
-                    detection_rates[detect_method][vae_type],
+                    detection_rates[detect_method][vae_type]/100,
                     marker="o",
                     label=letter_to_title[vae_type],
                     linewidth=2,
                     color=cmap(j))
         
-        ax.set_title(f"{detect_method} Method")
+        ax.set_title(f"{attack}, TP {detect_method} detection")
         ax.set_xlabel("Epsilon")
         ax.set_ylabel("Detection Rate") if idx == 0 else None
         ax.legend(loc="upper left")
