@@ -82,7 +82,7 @@ def perform_attacks(
 
         _, test_dataset = load_data(data_name, path="./data", labels=None, conv=True)
         # subset for debug
-        test_dataset = torch.utils.data.Subset(test_dataset, range(10))
+        # test_dataset = torch.utils.data.Subset(test_dataset, range(10))
         test_loader = torch.utils.data.DataLoader(
             test_dataset, batch_size=batch_size, shuffle=False
         )
@@ -207,27 +207,45 @@ def plot_results(json_file, save_dir, data_name, epsilons):
     for i, attack in enumerate(attack_methods):
         for j, vae_type in enumerate(vae_types):
             color = cmap(j)
-            axes[i].plot(
-                epsilons,
-                accuracies[vae_type][attack],
-                marker="o",
-                label=letter_to_title[vae_type],
-                linewidth=2,
-                color=color,
-            )
-        axes[i].set_title(f"{attack} victim acc")
-        axes[i].set_xlabel("c")
-        axes[i].grid(linestyle="--")
-        axes[i].legend()
+            if len(attack_methods) > 1:
+                axes[i].plot(
+                    epsilons,
+                    accuracies[vae_type][attack],
+                    marker="o",
+                    label=letter_to_title[vae_type],
+                    linewidth=2,
+                    color=color,
+                )
+            else:
+                axes.plot(
+                    epsilons,
+                    accuracies[vae_type][attack],
+                    marker="o",
+                    label=letter_to_title[vae_type],
+                    linewidth=2,
+                    color=color,
+                )
+        if len(attack_methods) > 1:
+            axes[i].set_title(f"{attack} victim acc")
+            axes[i].set_xlabel("c")
+            axes[i].grid(linestyle="--")
+            axes[i].legend()
+        else:
+            axes.set_title(f"{attack} victim acc")
+            axes.set_xlabel("c")
+            axes.grid(linestyle="--")
+            axes.legend()
 
     # Save the plot
     plt.tight_layout()
-    filename = f"{data_name}__accuracy_vs_c_combined.png"
+    filename = f"{data_name}_accuracy_vs_c_combined.png"
     plt.savefig(
         os.path.join(
             save_dir,
             filename,
-        )
+        ),
+        dpi=300,
+        bbox_inches="tight",
     )
     plt.close()
     print(
