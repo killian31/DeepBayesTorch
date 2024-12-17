@@ -1,3 +1,5 @@
+import random
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -13,16 +15,19 @@ from attacks.black_box import gaussian_perturbation_attack, sticker_attack
 from attacks.momentum_iterative_method import momentum_iterative_method
 from utils.utils import CLASS_LABELS, load_data
 
-vae_type = "D"
+vae_type = "E"
 data_name = "gtsrb"
-infty = True
+infty = False
 bbox = True
 
 
-_, test_dataset = load_data(data_name, path="./data", labels=[2], conv=True)
-test_dataset = torch.utils.data.Subset(test_dataset, range(1))
-images, _ = next(iter(torch.utils.data.DataLoader(test_dataset, batch_size=1)))
+_, test_dataset = load_data(data_name, path="./data", labels=[5], conv=True)
+images, _ = next(
+    iter(torch.utils.data.DataLoader(test_dataset, batch_size=100, shuffle=True))
+)
 images = images.to("cuda" if torch.cuda.is_available() else "cpu")
+random_index = random.randint(0, len(images) - 1)
+images = images[random_index].unsqueeze(0)
 encoder, generator = load_model(
     data_name, vae_type, 0, device="cuda" if torch.cuda.is_available() else "cpu"
 )
@@ -67,17 +72,19 @@ model = lambda x: bayes_classifier(
     lowerbound=lowerbound,
     K=10,
     beta=1.0,
-)
+)[0]
 sticker_sizes = [0, 0.05, 0.08, 0.1, 0.15, 0.2]
 epsilons = [0, 0.01, 0.02, 0.05, 0.1, 0.2]
 if bbox:
     images_adv = [
         [
-            gaussian_perturbation_attack(images, eps=eps)
+            gaussian_perturbation_attack(images, eps=eps, seed=np.random.randint(1000))
             for eps in tqdm(epsilons, desc="Gaussian")
         ],
         [
-            sticker_attack(images, sticker_size=eps, n_channels=3)
+            sticker_attack(
+                images, sticker_size=eps, n_channels=3, seed=np.random.randint(1000)
+            )
             for eps in tqdm(sticker_sizes, desc="Sticker")
         ],
     ]
@@ -107,7 +114,9 @@ if bbox:
                     f"eps={epsilons[j]}\n p={CLASS_LABELS[predictions[i][j]]}"
                 )
     plt.tight_layout()
-    plt.savefig(f"attacks_bbox_{data_name}_{vae_type}.png")
+    plt.savefig(
+        f"attacks_bbox_{data_name}_{vae_type}.png", dpi=300, bbox_inches="tight"
+    )
 
 
 if infty:
@@ -177,4 +186,6 @@ if infty:
                 f"eps={epsilons[j]}\n p={CLASS_LABELS[predictions[i][j]]}"
             )
     plt.tight_layout()
-    plt.savefig(f"attacks_infty_{data_name}_{vae_type}.png")
+    plt.savefig(
+        f"attacks_infty_{data_name}_{vae_type}.png", dpi=300, bbox_inches="tight"
+    )

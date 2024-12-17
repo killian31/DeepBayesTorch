@@ -86,7 +86,7 @@ def perform_attacks(
 
         _, test_dataset = load_data(data_name, path="./data", labels=None, conv=True)
         # subset for debug
-        test_dataset = torch.utils.data.Subset(test_dataset, range(10))
+        # test_dataset = torch.utils.data.Subset(test_dataset, range(10))
         test_loader = torch.utils.data.DataLoader(
             test_dataset, batch_size=batch_size, shuffle=False
         )
@@ -259,7 +259,9 @@ def plot_results(json_file, save_dir, data_name, epsilons):
         os.path.join(
             save_dir,
             filename,
-        )
+        ),
+        dpi=300,
+        bbox_inches="tight",
     )
     plt.close()
     print(
