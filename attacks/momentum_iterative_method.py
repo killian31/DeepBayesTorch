@@ -1,4 +1,4 @@
-"""The MomentumIterativeMethod attack."""
+# Coded by: Killian
 
 from typing import Optional
 

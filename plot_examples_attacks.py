@@ -1,3 +1,5 @@
+# Coded by: Killian
+
 import random
 
 import matplotlib.pyplot as plt

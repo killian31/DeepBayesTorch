@@ -1,3 +1,5 @@
+# Coded by: Bruno (code structure by Killian)
+
 import argparse
 import json
 import os
@@ -180,7 +182,7 @@ def perform_attacks(
                     x_clean.append(images.detach().cpu())
                     y_clean.append(y_pred_clean.detach().cpu())
                     y_clean_logits.append(y_pred_clean_logit.detach().cpu())
-                    
+
                 # Concatenate  and save results
                 x_adv = torch.cat(x_adv, dim=0)
                 y_adv = torch.cat(y_adv, dim=0)
@@ -190,7 +192,8 @@ def perform_attacks(
                 y_clean_logits = torch.cat(y_clean_logits, dim=0)
 
                 save_path = os.path.join(
-                    save_dir, f"{vae_type}_{attack}_{data_name}_epsilon_{float(epsilon)}.pkl"
+                    save_dir,
+                    f"{vae_type}_{attack}_{data_name}_epsilon_{float(epsilon)}.pkl",
                 )
                 results = {
                     "x_adv": x_adv,

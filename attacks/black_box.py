@@ -1,3 +1,7 @@
+# Coded by: Killian
+# We did not experiment the simba attack in our project due to computational constraints,
+# but we provide the implementation here that has ben tested and should work.
+
 import random
 from typing import Callable, Optional
 

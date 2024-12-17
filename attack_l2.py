@@ -1,3 +1,5 @@
+# Coded by Bruno (code structure by Killian)
+
 import argparse
 import json
 import os

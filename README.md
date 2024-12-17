@@ -3,6 +3,16 @@
 Pytorch implementation of the article
 [Are Generative Classifiers More Robust to Adversarial Attacks?](https://arxiv.org/abs/1802.06552).
 
+Code written by Bruno Amorim de Araujo, Franck Laborde and Killian Steunou.
+
+Summary of contributions:
+
+- Model architecture, training script, attack script logic, black-box attacks script and functions: **Killian**
+- $l_\infty, l_2, CW$ white-box attacks: **Bruno**
+- All detection scripts: **Franck**
+
+You can find at the beginning of each file in this repo who wrote the code.
+
 ## Install
 
 Create a Python3.12.2 virtual environment

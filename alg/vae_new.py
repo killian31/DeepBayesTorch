@@ -1,3 +1,5 @@
+# Coded by: Killian (+ Franck for the bayes_classifier)
+
 import time
 
 import numpy as np
