@@ -85,8 +85,6 @@ def perform_attacks(
         _, eval_fn = construct_optimizer(X_ph, Y_ph, enc, dec, ll, K, vae_type)
 
         _, test_dataset = load_data(data_name, path="./data", labels=None, conv=True)
-        # subset for debug
-        # test_dataset = torch.utils.data.Subset(test_dataset, range(10))
         test_loader = torch.utils.data.DataLoader(
             test_dataset, batch_size=batch_size, shuffle=False
         )
@@ -182,8 +180,8 @@ def perform_attacks(
                     x_clean.append(images.detach().cpu())
                     y_clean.append(y_pred_clean.detach().cpu())
                     y_clean_logits.append(y_pred_clean_logit.detach().cpu())
-
-                # Concatenate and save results
+                    
+                # Concatenate  and save results
                 x_adv = torch.cat(x_adv, dim=0)
                 y_adv = torch.cat(y_adv, dim=0)
                 y_adv_logits = torch.cat(y_adv_logits, dim=0)
@@ -192,7 +190,7 @@ def perform_attacks(
                 y_clean_logits = torch.cat(y_clean_logits, dim=0)
 
                 save_path = os.path.join(
-                    save_dir, f"{vae_type}_{attack}_{data_name}_epsilon_{epsilon}.pkl"
+                    save_dir, f"{vae_type}_{attack}_{data_name}_epsilon_{float(epsilon)}.pkl"
                 )
                 results = {
                     "x_adv": x_adv,

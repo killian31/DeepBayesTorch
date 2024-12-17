@@ -5,3 +5,8 @@ data
 *.png
 .DS_Store
 *.zip
+mnist_results/
+detection_results/
+first_results_mnist_infty_pkl/
+first_results_gtsrb_bbox_pkl/
+first_results_gtsrb_wbox_pkl/
